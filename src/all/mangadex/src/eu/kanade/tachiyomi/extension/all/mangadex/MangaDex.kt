@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.all.mangadex
 import android.app.Application
 import android.content.SharedPreferences
 import android.util.Log
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.AggregateDto
@@ -64,30 +65,10 @@ abstract class MangaDex(override val lang: String, val dexLang: String) :
             addQueryParameter("limit", MDConstants.mangaLimit.toString())
             addQueryParameter("offset", helper.getMangaListOffset(page))
             addQueryParameter("includes[]", MDConstants.coverArt)
-            if (preferences.getBoolean(MDConstants.getContentRatingSafePrefKey(dexLang), false)) {
-                addQueryParameter("contentRating[]", "safe")
-            }
-            if (preferences.getBoolean(
-                    MDConstants.getContentRatingEroticaPrefKey(dexLang),
-                    false
-                )
-            ) {
-                addQueryParameter("contentRating[]", "suggestive")
-            }
-            if (preferences.getBoolean(
-                    MDConstants.getContentRatingSuggestivePrefKey(dexLang),
-                    false
-                )
-            ) {
-                addQueryParameter("contentRating[]", "erotica")
-            }
-            if (preferences.getBoolean(
-                    MDConstants.getContentRatingPornographicPrefKey(dexLang),
-                    false
-                )
-            ) {
-                addQueryParameter("contentRating[]", "pornographic")
-            }
+            preferences.getStringSet(
+                MDConstants.getContentRatingPrefKey(dexLang),
+                MDConstants.contentRatingPrefDefaults
+            )?.forEach { addQueryParameter("contentRating[]", it) }
         }.build().toUrl().toString()
         return GET(
             url = url,
@@ -348,70 +329,29 @@ abstract class MangaDex(override val lang: String, val dexLang: String) :
             }
         }
 
-        val contentRatingSafePref = SwitchPreferenceCompat(screen.context).apply {
-            key = MDConstants.getContentRatingSafePrefKey(dexLang)
-            title = "Safe"
-            summary = "If enabled, shows content with the rating of safe (manga without any sexual themes)"
-            setDefaultValue(true)
-
+        val contentRatingPref = MultiSelectListPreference(screen.context).apply {
+            key = MDConstants.getContentRatingPrefKey(dexLang)
+            title = "Default content rating"
+            summary = "Show content with the selected ratings by default"
+            entries = arrayOf("Safe", "Suggestive", "Erotica", "Pornographic")
+            entryValues = arrayOf(
+                MDConstants.contentRatingPrefValSafe,
+                MDConstants.contentRatingPrefValSuggestive,
+                MDConstants.contentRatingPrefValErotica,
+                MDConstants.contentRatingPrefValPornographic
+            )
+            setDefaultValue(MDConstants.contentRatingPrefDefaults)
             setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
+                val checkValue = newValue as Set<String>
                 preferences.edit()
-                    .putBoolean(MDConstants.getContentRatingSafePrefKey(dexLang), checkValue)
-                    .commit()
-            }
-        }
-
-        val contentRatingSuggestivePref = SwitchPreferenceCompat(screen.context).apply {
-            key = MDConstants.getContentRatingSuggestivePrefKey(dexLang)
-            title = "Suggestive"
-            summary = "If enabled, shows content with the rating of suggestive (manga usually tagged as ecchi)"
-            setDefaultValue(true)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit()
-                    .putBoolean(MDConstants.getContentRatingSuggestivePrefKey(dexLang), checkValue)
-                    .commit()
-            }
-        }
-
-        val contentRatingEroticaPref = SwitchPreferenceCompat(screen.context).apply {
-            key = MDConstants.getContentRatingEroticaPrefKey(dexLang)
-            title = "Erotica"
-            summary = "If enabled, shows content with the rating of erotica (manga usually tagged as smut)"
-            setDefaultValue(false)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit()
-                    .putBoolean(MDConstants.getContentRatingEroticaPrefKey(dexLang), checkValue)
-                    .commit()
-            }
-        }
-
-        val contentRatingPornographicPref = SwitchPreferenceCompat(screen.context).apply {
-            key = MDConstants.getContentRatingPornographicPrefKey(dexLang)
-            title = "Pornographic"
-            summary = "If enabled, shows content with the rating of pornographic (manga usually tagged as hentai)"
-            setDefaultValue(false)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit().putBoolean(
-                    MDConstants.getContentRatingPornographicPrefKey(dexLang),
-                    checkValue
-                )
+                    .putStringSet(MDConstants.getContentRatingPrefKey(dexLang), checkValue)
                     .commit()
             }
         }
 
         screen.addPreference(dataSaverPref)
         screen.addPreference(standardHttpsPortPref)
-        screen.addPreference(contentRatingSafePref)
-        screen.addPreference(contentRatingSuggestivePref)
-        screen.addPreference(contentRatingEroticaPref)
-        screen.addPreference(contentRatingPornographicPref)
+        screen.addPreference(contentRatingPref)
     }
 
     override fun getFilterList(): FilterList =
